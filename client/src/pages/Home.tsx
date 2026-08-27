@@ -1,25 +1,59 @@
-import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Streamdown } from 'streamdown';
+// Paper Moon Minimal: editorial asimetris, ruang ivory, garis tinta, aksen Cap Vermilion, gerak seperti membalik halaman.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUpRight, CalendarDays, Check, ChevronLeft, ChevronRight, Copy, ExternalLink, Heart, MapPin, Music2, Pause, Play, Send, X } from "lucide-react";
+import { invitationConfig, galleryImages, type GuestMessage } from "@/lib/invitationConfig";
 
-/**
- * All content in this page are only for example, replace with your own feature implementation
- * When building pages, remember your instructions in Frontend Best Practices, Design Guide and Common Pitfalls
- */
+const emblem = "/manus-storage/paper-moon-emblem_fd02bb25.png";
+const hero = "/manus-storage/paper-moon-hero_612d462c.png";
+const storyImage = "https://images.unsplash.com/photo-1520854221256-17451cc331bf?auto=format&fit=crop&w=1400&q=85";
+
+function useCountdown(target: string) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, []);
+  const distance = Math.max(0, new Date(target).getTime() - now);
+  return { days: Math.floor(distance / 86400000), hours: Math.floor(distance / 3600000) % 24, minutes: Math.floor(distance / 60000) % 60, seconds: Math.floor(distance / 1000) % 60 };
+}
+
+function calendarUrl() {
+  const start = "20270619T030000Z"; const end = "20270619T070000Z";
+  const params = new URLSearchParams({ action: "TEMPLATE", text: `${invitationConfig.couple.first} & ${invitationConfig.couple.second} — Pernikahan`, dates: `${start}/${end}`, details: "Dengan hangat kami mengundang Anda untuk hadir dan menjadi bagian dari hari kami.", location: `${invitationConfig.events.reception.venue}, ${invitationConfig.events.reception.address}`, ctz: "Asia/Jakarta" });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function formatGuest() { const raw = new URLSearchParams(window.location.search).get("to")?.trim().replace(/\s+/g, " ") || "Tamu undangan"; return raw.slice(0, 80); }
+
 export default function Home() {
-  // If theme is switchable in App.tsx, we can implement theme toggling like this:
-  // const { theme, toggleTheme } = useTheme();
+  const [opened, setOpened] = useState(false); const [musicPlaying, setMusicPlaying] = useState(false); const [lightbox, setLightbox] = useState<number | null>(null); const [messages, setMessages] = useState<GuestMessage[]>([]); const [sent, setSent] = useState(false); const [copied, setCopied] = useState("");
+  const [form, setForm] = useState({ name: "", attendance: "Saya akan hadir", message: "" }); const audioRef = useRef<HTMLAudioElement>(null); const countdown = useCountdown(invitationConfig.date.iso); const guest = useMemo(formatGuest, []);
+  useEffect(() => { const stored = localStorage.getItem("paper-moon-guestbook"); if (stored) setMessages(JSON.parse(stored)); }, []);
+  useEffect(() => { document.body.classList.toggle("is-locked", lightbox !== null); return () => document.body.classList.remove("is-locked"); }, [lightbox]);
+  useEffect(() => { const nodes = document.querySelectorAll(".reveal"); const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add("is-visible"); observer.unobserve(entry.target); } }), { threshold: .12 }); nodes.forEach(node => observer.observe(node)); return () => observer.disconnect(); }, [opened]);
+  useEffect(() => { const key = (event: KeyboardEvent) => { if (lightbox === null) return; if (event.key === "Escape") setLightbox(null); if (event.key === "ArrowRight") setLightbox(i => i === null ? 0 : (i + 1) % galleryImages.length); if (event.key === "ArrowLeft") setLightbox(i => i === null ? 0 : (i - 1 + galleryImages.length) % galleryImages.length); }; window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key); }, [lightbox]);
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <main>
-        {/* Example: lucide-react for icons */}
-        <Loader2 className="animate-spin" />
-        Example Page
-        {/* Example: Streamdown for markdown rendering */}
-        <Streamdown>Any **markdown** content</Streamdown>
-        <Button variant="default">Example Button</Button>
-      </main>
+  const openInvitation = async () => { setOpened(true); if (audioRef.current) { audioRef.current.volume = .24; try { await audioRef.current.play(); setMusicPlaying(true); } catch { setMusicPlaying(false); } } };
+  const toggleMusic = async () => { if (!audioRef.current) return; if (musicPlaying) { audioRef.current.pause(); setMusicPlaying(false); } else { try { await audioRef.current.play(); setMusicPlaying(true); } catch { setMusicPlaying(false); } } };
+  const copyValue = async (value: string, key: string) => { try { await navigator.clipboard.writeText(value); } catch { const input = document.createElement("textarea"); input.value = value; document.body.appendChild(input); input.select(); document.execCommand("copy"); input.remove(); } setCopied(key); window.setTimeout(() => setCopied(""), 2000); };
+  const submit = (event: React.FormEvent) => { event.preventDefault(); if (!form.name.trim() || !form.message.trim()) return; const next = [{ ...form, name: form.name.trim(), message: form.message.trim(), createdAt: new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) }, ...messages]; setMessages(next); localStorage.setItem("paper-moon-guestbook", JSON.stringify(next)); setSent(true); setForm({ name: "", attendance: "Saya akan hadir", message: "" }); };
+
+  return <div className={`site-shell ${opened ? "is-opened" : ""}`}>
+    <audio ref={audioRef} src={invitationConfig.musicUrl} loop preload="none" />
+    <div className={`cover ${opened ? "cover--opened" : ""}`} aria-hidden={opened}>
+      <div className="cover__image" style={{ backgroundImage: `url(${hero})` }} /><div className="cover__veil" />
+      <div className="cover__content"><span className="emblem-mark emblem-mark--cover" aria-label="Emblem Paper Moon" role="img" /><p className="eyebrow">A private celebration · 19.06.27</p><h1><span>{invitationConfig.couple.first}</span><i>&</i><span>{invitationConfig.couple.second}</span></h1><div className="cover__rule" /><p className="cover__guest">Untuk <strong>{guest}</strong></p><button className="button button--light" onClick={openInvitation}>Buka undangan <ArrowUpRight size={16} /></button></div><p className="cover__side">Paper Moon / Yogyakarta</p>
     </div>
-  );
+    <header className="topbar"><a href="#home" className="brand"><span className="emblem-mark" aria-hidden="true" /><span>{invitationConfig.couple.nicknames}</span></a><nav>{[["#story", "Cerita"], ["#details", "Detail acara"], ["#gallery", "Galeri"], ["#rsvp", "RSVP"], ["#gift", "Tanda kasih"]].map(([href, label]) => <a key={href} href={href}>{label}</a>)}</nav><span className="topbar__date">{invitationConfig.date.label}</span></header>
+    <main>
+      <section className="hero" id="home"><div className="hero__copy reveal"><p className="eyebrow accent">Bab I · Sebuah awal</p><h2>Satu hari,<br /><em>dua nama.</em></h2><p className="hero__lead">Kami mengundang Anda untuk hadir ketika cerita kecil kami mengambil bentuk baru.</p><a className="text-link" href="#story">Baca cerita kami <ArrowDown size={15} /></a></div><div className="hero__photo reveal"><img src={hero} alt="Pasangan berdiri berdampingan di ruang bernuansa ivory" /><span className="photo-note">19 / 06 / 27 · Yogyakarta</span></div></section>
+      <section className="section story" id="story"><div className="section-index reveal">01 <span>/</span> cerita</div><div className="story__image reveal"><img src={storyImage} alt="Pasangan berjalan di courtyard dengan cahaya sore" /></div><div className="story__copy reveal"><p className="eyebrow accent">Dari percakapan kecil</p><h2>Yang tumbuh<br /><em>menjadi rumah.</em></h2>{invitationConfig.story.map(p => <p key={p} className="body-copy">{p}</p>)}<div className="signature"><span>Dengan kasih,</span><strong>{invitationConfig.couple.nicknames}</strong></div></div></section>
+      <section className="section details" id="details"><div className="section-index reveal">02 <span>/</span> tanggal & tempat</div><div className="details__heading reveal"><p className="eyebrow accent">Tandai kalender Anda</p><h2>Hari yang<br /><em>kami tunggu.</em></h2><p className="body-copy">{invitationConfig.date.day}, {invitationConfig.date.label}<br />Bersama keluarga besar {invitationConfig.parents}</p><a className="button button--dark" href={calendarUrl()} target="_blank" rel="noreferrer"><CalendarDays size={16} /> Simpan ke kalender</a></div><div className="event-list reveal"><article><span className="event-number">01</span><div><p className="eyebrow">Akad nikah</p><h3>{invitationConfig.events.akad.time}</h3><p>{invitationConfig.events.akad.venue}<br />{invitationConfig.events.akad.address}</p></div></article><article><span className="event-number">02</span><div><p className="eyebrow">Resepsi</p><h3>{invitationConfig.events.reception.time}</h3><p>{invitationConfig.events.reception.venue}<br />{invitationConfig.events.reception.address}</p></div></article><a className="text-link" href={invitationConfig.mapsUrl} target="_blank" rel="noreferrer">Lihat lokasi <MapPin size={15} /></a></div></section>
+      <section className="countdown-band reveal"><p className="eyebrow">Menghitung hari menuju perayaan</p><div className="countdown">{[[countdown.days, "hari"], [countdown.hours, "jam"], [countdown.minutes, "menit"], [countdown.seconds, "detik"]].map(([value, label]) => <div key={label}><strong>{String(value).padStart(2, "0")}</strong><span>{label}</span></div>)}</div></section>
+      <section className="section gallery-section" id="gallery"><div className="section-index reveal">03 <span>/</span> potongan waktu</div><div className="gallery-heading reveal"><p className="eyebrow accent">Enam frame, satu perjalanan</p><h2>Yang ingin<br /><em>kami ingat.</em></h2></div><div className="gallery-grid">{galleryImages.map((image, index) => <button className={`gallery-item gallery-item--${index + 1} reveal`} key={image.src} onClick={() => setLightbox(index)} aria-label={`Lihat foto ${index + 1}: ${image.alt}`}><img src={image.src} alt={image.alt} /><span>{String(index + 1).padStart(2, "0")} · {image.caption}</span></button>)}</div></section>
+      <section className="section rsvp-section" id="rsvp"><div className="section-index reveal">04 <span>/</span> kabar Anda</div><div className="rsvp__intro reveal"><p className="eyebrow accent">Satu baris dari Anda</p><h2>Bisakah hadir<br /><em>bersama kami?</em></h2><p className="body-copy">Mohon isi konfirmasi singkat. Pesan Anda akan tersimpan di perangkat ini untuk sementara.</p></div><form className="rsvp-form reveal" onSubmit={submit}><label htmlFor="name">Nama lengkap<input id="name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tulis nama Anda" required /></label><fieldset><legend>Kehadiran</legend>{["Saya akan hadir", "Belum bisa memastikan", "Tidak dapat hadir"].map(option => <label className="radio-label" key={option}><input type="radio" name="attendance" value={option} checked={form.attendance === option} onChange={e => setForm({ ...form, attendance: e.target.value })} /><span>{option}</span></label>)}</fieldset><label htmlFor="message">Pesan ucapan<textarea id="message" value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} placeholder="Tulis doa baik Anda di sini" rows={4} required /></label><button className="button button--dark" type="submit"><Send size={15} /> Kirim konfirmasi</button>{sent && <p className="form-success"><Check size={15} /> Terima kasih, pesan Anda sudah tersimpan.</p>}</form><div className="guestbook reveal"><p className="eyebrow">Buku tamu</p>{messages.length === 0 ? <p className="empty-state">Pesan ucapanmu akan muncul di sini setelah dikirim.</p> : messages.map((entry, index) => <article key={`${entry.createdAt}-${index}`}><div><strong>{entry.name}</strong><span>{entry.attendance} · {entry.createdAt}</span></div><p>“{entry.message}”</p></article>)}</div></section>
+      <section className="gift-section" id="gift"><div className="section-index reveal">05 <span>/</span> tanda kasih</div><div className="gift-copy reveal"><p className="eyebrow accent">Jika berkenan</p><h2>Doa Anda<br /><em>sudah cukup.</em></h2><p className="body-copy">Namun jika ingin mengirim tanda kasih, berikut detail yang dapat digunakan. Terima kasih telah menjadi bagian dari perjalanan kami.</p></div><div className="gift-details reveal"><div className="gift-block"><span className="eyebrow">{invitationConfig.gift.ewalletProvider}</span><strong>{invitationConfig.gift.ewalletNumber}</strong><small>a.n. {invitationConfig.gift.recipient}</small><button onClick={() => copyValue(invitationConfig.gift.ewalletNumber, "wallet")}><Copy size={14} /> {copied === "wallet" ? "Tersalin" : "Salin nomor"}</button></div><div className="gift-block"><span className="eyebrow">{invitationConfig.gift.bank}</span><strong>{invitationConfig.gift.accountNumber}</strong><small>a.n. {invitationConfig.gift.recipient}</small><button onClick={() => copyValue(invitationConfig.gift.accountNumber, "bank")}><Copy size={14} /> {copied === "bank" ? "Tersalin" : "Salin nomor"}</button></div></div></section>
+    </main>
+    <footer><span className="emblem-mark emblem-mark--footer" aria-hidden="true" /><p>Terima kasih telah menulis satu halaman<br />dalam cerita kami.</p><span>{invitationConfig.couple.nicknames} · 2027</span></footer>
+    <button className="music-control" onClick={toggleMusic} aria-label={musicPlaying ? "Jeda musik" : "Putar musik"}>{musicPlaying ? <Pause size={15} /> : <Music2 size={15} />}<span>{musicPlaying ? "Jeda musik" : "Putar musik"}</span></button>
+    <nav className="mobile-nav" aria-label="Navigasi mobile">{[["#story", "Cerita", Heart], ["#details", "Acara", CalendarDays], ["#gallery", "Galeri", ArrowUpRight], ["#rsvp", "RSVP", Send]].map(([href, label, Icon]) => <a key={href as string} href={href as string}><Icon size={15} /><span>{label as string}</span></a>)}</nav>
+    {lightbox !== null && <div className="lightbox" role="dialog" aria-modal="true" aria-label="Galeri foto" onClick={e => { if (e.target === e.currentTarget) setLightbox(null); }}><button className="lightbox__close" onClick={() => setLightbox(null)} aria-label="Tutup"><X /></button><button className="lightbox__prev" onClick={() => setLightbox(i => i === null ? 0 : (i - 1 + galleryImages.length) % galleryImages.length)} aria-label="Foto sebelumnya"><ChevronLeft /></button><figure><img src={galleryImages[lightbox].src} alt={galleryImages[lightbox].alt} /><figcaption>{String(lightbox + 1).padStart(2, "0")} / {galleryImages[lightbox].caption}</figcaption></figure><button className="lightbox__next" onClick={() => setLightbox(i => i === null ? 0 : (i + 1) % galleryImages.length)} aria-label="Foto berikutnya"><ChevronRight /></button></div>}
+  </div>;
 }
